@@ -25,7 +25,7 @@ YTDL_OPTIONS = {
     "default_search": "ytsearch",
     "source_address": "0.0.0.0",
     "http_headers": {
-        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36",
+        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/124.0.0.0 Safari/537.36",
         "Accept-Language": "en-US,en;q=0.9",
         "Referer": "https://www.youtube.com/",
     },
@@ -286,6 +286,6 @@ async def on_voice_state_update(member, before, after):
 
 if __name__ == "__main__":
     if not BOT_TOKEN:
-        print("[ERROR] Chưa có DISCORD_TOKEN trong Environment Variables!")
+        print("[ERROR] Chưa có DISCORD_TOKEN!")
         exit(1)
     bot.run(BOT_TOKEN)
