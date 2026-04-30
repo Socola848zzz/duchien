@@ -33,6 +33,7 @@ YTDL_OPTIONS = {
     "retries": 5,
     "fragment_retries": 5,
     "skip_unavailable_fragments": True,
+    "cookiefile": "cookies.txt",          # ← ĐÃ GẮN DÒNG NÀY
 }
 
 FFMPEG_OPTIONS = {
