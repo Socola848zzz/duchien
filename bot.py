@@ -114,26 +114,25 @@ class MusicCog(commands.Cog):
             guild.voice_client.play(source, after=lambda e: self._after(guild, e))
             guild.voice_client.source.volume = player.volume
 
-    # ==================== SLASH COMMANDS ====================
+    # ==================== JOIN ====================
     @app_commands.command(name="join", description="Mời bot vào kênh thoại của bạn")
     async def join_slash(self, interaction: discord.Interaction):
         await self._join_logic(interaction)
 
+    @commands.command(name="join")
+    async def join_prefix(self, ctx):
+        await self._join_logic(ctx)
+
+    # ==================== PLAY ====================
     @app_commands.command(name="play", description="Phát nhạc (YouTube / Tên bài)")
     @app_commands.describe(query="Link YouTube hoặc tên bài hát")
     async def play_slash(self, interaction: discord.Interaction, query: str):
         await self._play_logic(interaction, query)
 
-    # ==================== PREFIX COMMANDS (!join, !play) ====================
-    @commands.command(name="join", help="Mời bot vào kênh thoại")
-    async def join_prefix(self, ctx):
-        await self._join_logic(ctx)
-
-    @commands.command(name="play", help="Phát nhạc từ link hoặc tên bài")
+    @commands.command(name="play")
     async def play_prefix(self, ctx, *, query: str):
         await self._play_logic(ctx, query)
 
-    # ==================== LOGIC CHUNG ====================
     async def _join_logic(self, source):
         if isinstance(source, discord.Interaction):
             user = source.user
@@ -149,7 +148,6 @@ class MusicCog(commands.Cog):
 
         vc_channel = user.voice.channel
         vc = guild.voice_client
-
         try:
             if vc is None:
                 await vc_channel.connect(timeout=15, reconnect=True)
@@ -178,7 +176,6 @@ class MusicCog(commands.Cog):
 
         vc_channel = user.voice.channel
         vc = guild.voice_client
-
         try:
             if vc is None:
                 vc = await vc_channel.connect(timeout=15, reconnect=True)
@@ -188,17 +185,13 @@ class MusicCog(commands.Cog):
             return await send(embed=discord.Embed(description=f"Lỗi kết nối: {e}", color=0xFF4444))
 
         player = self.get_player(guild.id)
-
         if not re.match(r"https?://", query):
             query = f"ytsearch:{query}"
-
         try:
             sources = await YTDLSource.from_url(query, loop=self.bot.loop)
         except Exception as e:
             return await send(embed=discord.Embed(description=f"Lỗi: {e}", color=0xFF4444))
-
         player.add(sources)
-
         if not vc.is_playing() and not vc.is_paused():
             source = player.next()
             if source:
@@ -210,7 +203,6 @@ class MusicCog(commands.Cog):
                 if source.thumbnail: embed.set_thumbnail(url=source.thumbnail)
                 embed.set_footer(text=f"Yêu cầu bởi {user.display_name}")
                 return await send(embed=embed)
-
         added = sources[0]
         embed = discord.Embed(title="✅ Đã thêm vào hàng chờ", description=f"[{added.title}]({added.url})", color=EMBED_COLOR)
         embed.add_field(name="Thời lượng", value=YTDLSource.fmt_dur(added.duration))
@@ -219,36 +211,184 @@ class MusicCog(commands.Cog):
         if added.thumbnail: embed.set_thumbnail(url=added.thumbnail)
         await send(embed=embed)
 
-    # ==================== CÁC LỆNH KHÁC (giữ nguyên) ====================
+    # ==================== CÁC LỆNH KHÁC ====================
     @app_commands.command(name="skip", description="Bỏ qua bài hiện tại")
-    async def skip(self, interaction: discord.Interaction):
-        vc = interaction.guild.voice_client
-        if not vc or not vc.is_playing():
-            return await interaction.response.send_message(embed=discord.Embed(description="Không có bài nào đang phát.", color=0xFF4444), ephemeral=True)
-        vc.stop()
-        await interaction.response.send_message(embed=discord.Embed(description="⏭️ Đã bỏ qua!", color=EMBED_COLOR))
+    async def skip_slash(self, interaction: discord.Interaction):
+        await self._skip_logic(interaction)
 
     @commands.command(name="skip")
     async def skip_prefix(self, ctx):
-        await self.skip(ctx)  # reuse slash logic
+        await self._skip_logic(ctx)
 
-    # ... (giữ nguyên các lệnh còn lại: stop, pause, resume, queue, volume, nowplaying, leave)
+    async def _skip_logic(self, source):
+        if isinstance(source, discord.Interaction):
+            vc = source.guild.voice_client
+            send = source.response.send_message
+        else:
+            vc = source.guild.voice_client
+            send = source.send
+        if not vc or not vc.is_playing():
+            return await send(embed=discord.Embed(description="Không có bài nào đang phát.", color=0xFF4444))
+        vc.stop()
+        await send(embed=discord.Embed(description="⏭️ Đã bỏ qua!", color=EMBED_COLOR))
 
     @app_commands.command(name="stop", description="Dừng nhạc và rời kênh")
-    async def stop(self, interaction: discord.Interaction):
-        player = self.get_player(interaction.guild.id)
-        player.clear()
-        vc = interaction.guild.voice_client
-        if vc:
-            vc.stop()
-            await vc.disconnect()
-        await interaction.response.send_message(embed=discord.Embed(description="⏹️ Đã dừng và rời kênh.", color=EMBED_COLOR))
+    async def stop_slash(self, interaction: discord.Interaction):
+        await self._stop_logic(interaction)
 
     @commands.command(name="stop")
     async def stop_prefix(self, ctx):
-        await self.stop(ctx)
+        await self._stop_logic(ctx)
 
-    # ... (tương tự cho pause, resume, queue, volume, nowplaying, leave)
+    async def _stop_logic(self, source):
+        if isinstance(source, discord.Interaction):
+            player = self.get_player(source.guild.id)
+            vc = source.guild.voice_client
+            send = source.response.send_message
+        else:
+            player = self.get_player(source.guild.id)
+            vc = source.guild.voice_client
+            send = source.send
+        player.clear()
+        if vc:
+            vc.stop()
+            await vc.disconnect()
+        await send(embed=discord.Embed(description="⏹️ Đã dừng và rời kênh.", color=EMBED_COLOR))
+
+    @app_commands.command(name="pause", description="Tạm dừng nhạc")
+    async def pause_slash(self, interaction: discord.Interaction):
+        await self._pause_logic(interaction)
+
+    @commands.command(name="pause")
+    async def pause_prefix(self, ctx):
+        await self._pause_logic(ctx)
+
+    async def _pause_logic(self, source):
+        if isinstance(source, discord.Interaction):
+            vc = source.guild.voice_client
+            send = source.response.send_message
+        else:
+            vc = source.guild.voice_client
+            send = source.send
+        if vc and vc.is_playing():
+            vc.pause()
+            await send(embed=discord.Embed(description="⏸️ Đã tạm dừng.", color=EMBED_COLOR))
+        else:
+            await send(embed=discord.Embed(description="Không có gì đang phát.", color=0xFF4444))
+
+    @app_commands.command(name="resume", description="Tiếp tục phát nhạc")
+    async def resume_slash(self, interaction: discord.Interaction):
+        await self._resume_logic(interaction)
+
+    @commands.command(name="resume")
+    async def resume_prefix(self, ctx):
+        await self._resume_logic(ctx)
+
+    async def _resume_logic(self, source):
+        if isinstance(source, discord.Interaction):
+            vc = source.guild.voice_client
+            send = source.response.send_message
+        else:
+            vc = source.guild.voice_client
+            send = source.send
+        if vc and vc.is_paused():
+            vc.resume()
+            await send(embed=discord.Embed(description="▶️ Đã tiếp tục.", color=EMBED_COLOR))
+        else:
+            await send(embed=discord.Embed(description="Bot không đang tạm dừng.", color=0xFF4444))
+
+    @app_commands.command(name="queue", description="Xem hàng chờ")
+    async def queue_slash(self, interaction: discord.Interaction):
+        await self._queue_logic(interaction)
+
+    @commands.command(name="queue")
+    async def queue_prefix(self, ctx):
+        await self._queue_logic(ctx)
+
+    async def _queue_logic(self, source):
+        if isinstance(source, discord.Interaction):
+            player = self.get_player(source.guild.id)
+            send = source.response.send_message
+        else:
+            player = self.get_player(source.guild.id)
+            send = source.send
+        embed = discord.Embed(title="📋 Hàng chờ", color=EMBED_COLOR)
+        if player.current:
+            embed.add_field(name="🎵 Đang phát", value=f"[{player.current.title}]({player.current.url}) `{YTDLSource.fmt_dur(player.current.duration)}`", inline=False)
+        if player.queue:
+            lines = [f"`{i}.` [{s.title}]({s.url}) `{YTDLSource.fmt_dur(s.duration)}`" for i, s in enumerate(list(player.queue)[:15], 1)]
+            if len(player.queue) > 15: lines.append(f"...và {len(player.queue) - 15} bài nữa")
+            embed.add_field(name="📌 Tiếp theo", value="\n".join(lines), inline=False)
+        if not player.current and not player.queue: embed.description = "Hàng chờ trống."
+        await send(embed=embed)
+
+    @app_commands.command(name="volume", description="Chỉnh âm lượng (0-200)")
+    @app_commands.describe(level="Âm lượng từ 0 đến 200")
+    async def volume_slash(self, interaction: discord.Interaction, level: int):
+        await self._volume_logic(interaction, level)
+
+    @commands.command(name="volume")
+    async def volume_prefix(self, ctx, level: int):
+        await self._volume_logic(ctx, level)
+
+    async def _volume_logic(self, source, level):
+        if isinstance(source, discord.Interaction):
+            player = self.get_player(source.guild.id)
+            vc = source.guild.voice_client
+            send = source.response.send_message
+        else:
+            player = self.get_player(source.guild.id)
+            vc = source.guild.voice_client
+            send = source.send
+        if not (0 <= level <= 200):
+            return await send(embed=discord.Embed(description="Âm lượng phải từ 0 đến 200.", color=0xFF4444))
+        player.volume = level / 100
+        if vc and vc.source: vc.source.volume = player.volume
+        await send(embed=discord.Embed(description=f"🔊 Âm lượng: {level}%", color=EMBED_COLOR))
+
+    @app_commands.command(name="nowplaying", description="Xem bài đang phát")
+    async def nowplaying_slash(self, interaction: discord.Interaction):
+        await self._nowplaying_logic(interaction)
+
+    @commands.command(name="nowplaying")
+    async def nowplaying_prefix(self, ctx):
+        await self._nowplaying_logic(ctx)
+
+    async def _nowplaying_logic(self, source):
+        if isinstance(source, discord.Interaction):
+            player = self.get_player(source.guild.id)
+            send = source.response.send_message
+        else:
+            player = self.get_player(source.guild.id)
+            send = source.send
+        if not player.current:
+            return await send(embed=discord.Embed(description="Không có bài nào đang phát.", color=0xFF4444))
+        s = player.current
+        embed = discord.Embed(title="🎵 Đang phát", description=f"[{s.title}]({s.url})", color=EMBED_COLOR)
+        embed.add_field(name="Thời lượng", value=YTDLSource.fmt_dur(s.duration))
+        embed.add_field(name="Kênh", value=s.uploader)
+        if s.thumbnail: embed.set_thumbnail(url=s.thumbnail)
+        await send(embed=embed)
+
+    @app_commands.command(name="leave", description="Bot rời kênh thoại")
+    async def leave_slash(self, interaction: discord.Interaction):
+        await self._leave_logic(interaction)
+
+    @commands.command(name="leave")
+    async def leave_prefix(self, ctx):
+        await self._leave_logic(ctx)
+
+    async def _leave_logic(self, source):
+        if isinstance(source, discord.Interaction):
+            vc = source.guild.voice_client
+            send = source.response.send_message
+        else:
+            vc = source.guild.voice_client
+            send = source.send
+        if vc:
+            self.get_player(source.guild.id).clear()
+            await vc.disconnect()
+        await send(embed=discord.Embed(description="👋 Bot đã rời kênh.", color=EMBED_COLOR))
 
 intents = discord.Intents.default()
 intents.message_content = True
